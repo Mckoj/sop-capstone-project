@@ -1,22 +1,113 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from '@/lib/auth-client';
+
+interface UserWithRole {
+  id: string;
+  name: string;
+  email: string;
+  role: 'ADMIN' | 'MANAGER' | 'CASHIER';
+  image?: string | null;
+}
 
 export default function Home() {
-  return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans">
-      <main className="flex flex-col items-center justify-center grow px-4 sm:px-6 lg:px-8 text-center space-y-8">
-        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl">
-          Nienalabs Starter Kit
-        </h1>
-        
-        <p className="max-w-2xl text-lg text-zinc-600 dark:text-zinc-300">
-          Your Next.js project is ready. Authentication and other configurations have been pre-configured.
-        </p>
+  const router = useRouter();
+  const { data: session, isPending } = useSession();
+  const [isChecking, setIsChecking] = useState(true);
+  const [debugInfo, setDebugInfo] = useState<string>('');
 
-        <div className="p-4 border rounded-lg bg-zinc-50 border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800">
-          <p className="font-semibold">
-            Please check the <code>README.md</code> file for setup instructions and documentation.
-          </p>
+  useEffect(() => {
+    const checkRoleAndRedirect = async () => {
+      setDebugInfo('Checking session...');
+      
+      if (isPending) {
+        setDebugInfo('Session is still loading...');
+        return;
+      }
+
+      if (session && session.user) {
+        setDebugInfo(`Session found for user: ${session.user.email}`);
+        
+        try {
+          setDebugInfo('Fetching user role from API...');
+          // Fetch user with role from API
+          const res = await fetch('/api/user');
+          
+          if (res.ok) {
+            const user: UserWithRole = await res.json();
+            setDebugInfo(`Raw user data: ${JSON.stringify(user)}`);
+            
+            const role = user.role?.toLowerCase() || 'cashier';
+            setDebugInfo(`User role from API: ${user.role} | Lowercase: ${role}`);
+            
+            setDebugInfo(`Redirecting to: /${role}...`);
+            
+            // Redirect based on role
+            if (role === 'admin') {
+              router.push('/admin');
+            } else if (role === 'manager') {
+              router.push('/manager');
+            } else if (role === 'cashier') {
+              router.push('/cashier');
+            } else {
+              setDebugInfo(`Unknown role: ${role} | User object: ${JSON.stringify(user)}`);
+              console.error('Unknown role:', role, 'Full user:', user);
+            }
+          } else {
+            const error = await res.json();
+            setDebugInfo(`API Error: ${error.error}`);
+          }
+        } catch (error) {
+          setDebugInfo(`Error fetching user role: ${error}`);
+          console.error('Error fetching user role:', error);
+        }
+      } else {
+        setDebugInfo('No session found - redirecting to login');
+        router.push('/auth/sign-in');
+      }
+      
+      setIsChecking(false);
+    };
+
+    checkRoleAndRedirect();
+  }, [session, isPending, router]);
+
+  // Show loading state while checking session and role
+  if (isPending || isChecking) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-black">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-zinc-600 dark:text-zinc-400">Loading...</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-500 mt-4">{debugInfo}</p>
         </div>
-      </main>
+      </div>
+    );
+  }
+
+  // If user is logged in, don't show login page (redirect already triggered)
+  if (session && session.user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-black">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-zinc-600 dark:text-zinc-400">Redirecting...</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-500 mt-4">{debugInfo}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show connecting state while pushing to login
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-white dark:bg-black">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+        <p className="text-zinc-600 dark:text-zinc-400">Redirecting to login...</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-500 mt-4">{debugInfo}</p>
+      </div>
     </div>
   );
 }
