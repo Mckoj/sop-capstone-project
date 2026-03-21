@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Box, AlertTriangle } from "lucide-react";
+import RestockAction from "./RestockAction";
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,7 @@ export default async function InventoryTab() {
                 <th className="p-4 font-semibold text-sm">SKU / Barcode</th>
                 <th className="p-4 font-semibold text-sm text-right">Quantity Available</th>
                 <th className="p-4 font-semibold text-sm text-center">Status</th>
+                <th className="p-4 font-semibold text-sm text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -69,12 +71,15 @@ export default async function InventoryTab() {
                         </span>
                       )}
                     </td>
+                    <td className="p-4 flex items-center justify-end">
+                      <RestockAction productId={product.id} />
+                    </td>
                   </tr>
                 );
               })}
               {products.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="p-12 text-center text-muted-foreground">
+                  <td colSpan={5} className="p-12 text-center text-muted-foreground">
                     <Box className="w-12 h-12 mx-auto mb-4 opacity-50" />
                     <p>Your inventory is empty.</p>
                   </td>
