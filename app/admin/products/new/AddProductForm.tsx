@@ -4,7 +4,12 @@ import { useActionState } from 'react';
 import { createProduct } from '../actions';
 import { Save, Loader2 } from 'lucide-react';
 
-export default function AddProductForm() {
+interface Category {
+  id: string;
+  name: string;
+}
+
+export default function AddProductForm({ categories }: { categories: Category[] }) {
   const [state, action, isPending] = useActionState(createProduct, null);
 
   return (
@@ -29,15 +34,19 @@ export default function AddProductForm() {
         </div>
         
         <div>
-          <label htmlFor="category" className="block text-sm font-medium mb-2">Category</label>
-          <input 
-            type="text" 
-            id="category" 
-            name="category" 
+          <label htmlFor="categoryId" className="block text-sm font-medium mb-2">Category</label>
+          <select 
+            id="categoryId" 
+            name="categoryId" 
             required 
-            placeholder="e.g. Beverages"
-            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
-          />
+            defaultValue=""
+            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary transition-shadow appearance-none"
+          >
+            <option value="" disabled>Select a category</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">

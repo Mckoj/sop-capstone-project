@@ -6,12 +6,12 @@ import { redirect } from 'next/navigation';
 
 export async function createProduct(prevState: any, formData: FormData) {
   const name = formData.get('name') as string;
-  const category = formData.get('category') as string;
+  const categoryId = formData.get('categoryId') as string;
   const price = parseFloat(formData.get('price') as string);
   const quantity = parseInt(formData.get('quantity') as string, 10);
   const barcode = formData.get('barcode') as string;
 
-  if (!name || !category || isNaN(price) || isNaN(quantity) || !barcode) {
+  if (!name || !categoryId || isNaN(price) || isNaN(quantity) || !barcode) {
     return { error: 'Please fill out all fields correctly.' };
   }
 
@@ -19,7 +19,7 @@ export async function createProduct(prevState: any, formData: FormData) {
     await prisma.product.create({
       data: {
         name,
-        category,
+        categoryId,
         price,
         quantity,
         barcode,

@@ -1,8 +1,13 @@
 import { Package, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import AddProductForm from './AddProductForm';
+import { prisma } from '@/lib/prisma';
 
-export default function NewProductPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function NewProductPage() {
+  const categories = await prisma.category.findMany({ orderBy: { name: 'asc' } });
+
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
       <div className="mb-6">
@@ -22,7 +27,7 @@ export default function NewProductPage() {
       </div>
 
       <div className="bg-card border border-border rounded-xl shadow-sm p-6 sm:p-8">
-        <AddProductForm />
+        <AddProductForm categories={categories} />
       </div>
     </div>
   );

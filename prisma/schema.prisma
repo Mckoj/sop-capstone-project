@@ -84,16 +84,26 @@ enum AccountStatus {
   SUSPENDED
 }
 
-model Product {
-  id        String  @id @default(cuid())
-  name      String
-  category  String
-  price     Float
-  quantity  Int
-  barcode   String  @unique
-  createdAt DateTime @default(now())
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+  @@map("category")
+}
 
-  saleItems SaleItem[]
+model Product {
+  id         String    @id @default(cuid())
+  name       String
+  categoryId String
+  price      Float
+  quantity   Int
+  barcode    String    @unique
+  createdAt  DateTime  @default(now())
+
+  category   Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  saleItems  SaleItem[]
   @@map("product")
 }
 
