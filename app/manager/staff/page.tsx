@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
-import { Users, Edit, Trash2, Shield, Clock, TrendingUp, Award } from 'lucide-react';
+import { Users, Edit, Trash2, Shield, Clock, TrendingUp, Award, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import AddStaffModal from './AddStaffModal';
+import { approveUser, suspendUser } from './actions';
+import { Button } from '@/components/ui/button';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,17 +42,24 @@ export default async function StaffPage() {
       email: user.email,
       phone: '+233 XX XXX XXXX', // Mocked, no phone in schema
       shift: hasWorkedToday ? 'Current Shift' : 'Off-Duty',
-      status: hasWorkedToday ? 'active' : 'inactive',
+      // Status comes from actual DB status now
+      status: user.status.toLowerCase(), 
+      isWorking: hasWorkedToday,
       performance: { accuracy: 98, speed: 95, customerRating: 4.8 }, // Mocked metrics
       stats: { todayTransactions, todaySales, hoursWorked: hasWorkedToday ? 4.5 : 0 },
+      createdAt: user.createdAt
     };
   });
 
+  // Separate users by status
+  const pendingStaff = staffMembers.filter(s => s.status === 'pending');
+  const nonPendingStaff = staffMembers.filter(s => s.status !== 'pending');
+
   // Calculate high-level stats based on actual data
-  const totalActive = staffMembers.filter(s => s.status === 'active').length;
-  const totalSalesAll = staffMembers.reduce((sum, s) => sum + s.stats.todaySales, 0);
-  const avgAccuracy = staffMembers.length > 0 
-    ? (staffMembers.reduce((sum, s) => sum + s.performance.accuracy, 0) / staffMembers.length).toFixed(1) 
+  const totalActiveWorking = nonPendingStaff.filter(s => s.isWorking && s.status === 'active').length;
+  const totalSalesAll = nonPendingStaff.reduce((sum, s) => sum + s.stats.todaySales, 0);
+  const avgAccuracy = nonPendingStaff.length > 0 
+    ? (nonPendingStaff.reduce((sum, s) => sum + s.performance.accuracy, 0) / nonPendingStaff.length).toFixed(1) 
     : '0.0';
 
   return (
@@ -72,8 +81,8 @@ export default async function StaffPage() {
               <Users className="w-5 h-5 text-green-500" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground font-medium">Active Now</p>
-              <p className="text-2xl font-bold">{totalActive}</p>
+              <p className="text-sm text-muted-foreground font-medium">Working Now</p>
+              <p className="text-2xl font-bold">{totalActiveWorking}</p>
             </div>
           </div>
         </div>
@@ -84,7 +93,7 @@ export default async function StaffPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground font-medium">Off Duty</p>
-              <p className="text-2xl font-bold">{staffMembers.length - totalActive}</p>
+              <p className="text-2xl font-bold">{nonPendingStaff.length - totalActiveWorking}</p>
             </div>
           </div>
         </div>
@@ -114,9 +123,53 @@ export default async function StaffPage() {
         </div>
       </div>
 
+      {/* Pending Approvals Section */}
+      {pendingStaff.length > 0 && (
+        <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-6 mt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <AlertCircle className="w-5 h-5 text-orange-500" />
+            <h2 className="text-xl font-bold text-orange-500">Pending Approvals ({pendingStaff.length})</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pendingStaff.map(staff => (
+              <div key={staff.id} className="bg-card border border-orange-500/20 rounded-xl p-4 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-orange-500/20 to-transparent pointer-events-none" />
+                
+                <h3 className="font-bold text-lg">{staff.name}</h3>
+                <p className="text-sm text-muted-foreground mb-3">{staff.email}</p>
+                
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="px-2 py-1 rounded bg-orange-500/10 text-orange-500 text-xs font-bold uppercase tracking-wider">
+                    Awaiting Approval
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Joined {new Date(staff.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                
+                <div className="flex gap-2 mt-auto">
+                  <form action={approveUser.bind(null, staff.id)} className="flex-1">
+                    <Button type="submit" variant="outline" className="w-full bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500 hover:text-white">
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Approve
+                    </Button>
+                  </form>
+                  <form action={suspendUser.bind(null, staff.id)} className="flex-1">
+                    <Button type="submit" variant="outline" className="w-full bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500 hover:text-white">
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Deny
+                    </Button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Staff Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        {staffMembers.map(staff => (
+        {nonPendingStaff.map(staff => (
           <div key={staff.id} className="bg-card border border-border rounded-xl p-6 hover:shadow-md transition-shadow">
             {/* Header */}
             <div className="flex items-start justify-between mb-4">
@@ -137,21 +190,36 @@ export default async function StaffPage() {
                     </span>
                     <span className={`px-2 py-1 rounded-full text-xs font-bold border ${
                       staff.status === 'active'
-                        ? 'bg-green-500/10 text-green-500 border-green-500/20'
-                        : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20'
+                        ? staff.isWorking 
+                          ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                          : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20'
+                        : 'bg-red-500/10 text-red-500 border-red-500/20'
                     }`}>
-                      {staff.status === 'active' ? '● Active' : '○ Off Duty'}
+                      {staff.status === 'active' ? (staff.isWorking ? '● Working' : '○ Off Duty') : '☒ Suspended'}
                     </span>
                   </div>
                 </div>
               </div>
               <div className="flex gap-1">
-                <button className="p-2 hover:bg-primary/10 text-primary rounded-lg transition-colors border border-transparent hover:border-primary/20">
+                {staff.status === 'active' ? (
+                  <form action={suspendUser.bind(null, staff.id)}>
+                    <Button type="submit" variant="ghost" size="icon" title="Suspend User" className="text-orange-500 hover:bg-orange-500/10 hover:text-orange-600">
+                      <AlertCircle className="w-4 h-4" />
+                    </Button>
+                  </form>
+                ) : (
+                  <form action={approveUser.bind(null, staff.id)}>
+                    <Button type="submit" variant="ghost" size="icon" title="Reactivate User" className="text-green-600 hover:bg-green-500/10 hover:text-green-700">
+                      <CheckCircle className="w-4 h-4" />
+                    </Button>
+                  </form>
+                )}
+                <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/10">
                   <Edit className="w-4 h-4" />
-                </button>
-                <button className="p-2 hover:bg-destructive/10 text-destructive rounded-lg transition-colors border border-transparent hover:border-destructive/20">
+                </Button>
+                <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10">
                   <Trash2 className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
             </div>
 

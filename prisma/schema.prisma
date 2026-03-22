@@ -8,20 +8,21 @@ datasource db {
 }
 
 model User {
-  id            String    @id
+  id            String        @id
   name          String
   email         String
-  emailVerified Boolean   @default(false)
+  emailVerified Boolean       @default(false)
   image         String?
-  role          Role      @default(CASHIER)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  role          Role          @default(CASHIER)
+  status        AccountStatus @default(PENDING)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
   sessions      Session[]
   accounts      Account[]
+  sales         Sale[]
 
   @@unique([email])
   @@map("user")
-  sales Sale[]
 }
 
 model Session {
@@ -75,6 +76,12 @@ enum Role {
   ADMIN
   MANAGER
   CASHIER
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
 }
 
 model Product {

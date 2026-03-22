@@ -30,6 +30,14 @@ export default function Home() {
       if (session && session.user) {
         setDebugInfo(`Session found for user: ${session.user.email}`);
         
+        // Intercept pending user immediately before fetching full role
+        if ((session.user as any).status === 'PENDING') {
+          setDebugInfo('Account is pending manager approval. Redirecting...');
+          router.replace('/account/pending');
+          setIsChecking(false);
+          return;
+        }
+        
         try {
           setDebugInfo('Fetching user role from API...');
           // Fetch user with role from API
