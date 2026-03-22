@@ -10,8 +10,12 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
   const { data: session, isPending } = useSession();
 
   useEffect(() => {
-    if (!isPending && !session) {
-      router.push('/');
+    if (!isPending) {
+      if (!session) {
+        router.push('/');
+      } else if ((session.user as any).status === 'PENDING') {
+        router.push('/account/pending');
+      }
     }
   }, [session, isPending, router]);
 

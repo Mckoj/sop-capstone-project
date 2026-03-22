@@ -4,8 +4,9 @@ import Link from "next/link";
 
 export const dynamic = 'force-dynamic';
 
-export default async function ProductsTab() {
+export default async function ProductsPage() {
   const products = await prisma.product.findMany({
+    include: { category: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -43,7 +44,7 @@ export default async function ProductsTab() {
                     </div>
                     {product.name}
                   </td>
-                  <td className="p-4 text-muted-foreground">{product.category}</td>
+                  <td className="p-4 text-muted-foreground">{product.category?.name}</td>
                   <td className="p-4 font-semibold">GH₵ {product.price.toFixed(2)}</td>
                   <td className="p-4">
                     <span 

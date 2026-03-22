@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { TrendingUp, Users, DollarSign, Receipt, Clock, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import Link from 'next/link';
+import { approveUser, suspendUser } from './staff/actions';
+import { Button } from '@/components/ui/button';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,9 +94,24 @@ export default async function ManagerDashboardPage() {
     { label: 'Avg Transaction', value: `GH₵ ${avgTransaction.toFixed(2)}`, change: 'Live', icon: TrendingUp, color: 'text-orange-500' },
   ];
 
-  // We are emptying their mock pending approvals because there is no DB support for this yet,
-  // but preserving the type array so the UI continues to render safely if populated later.
-  const pendingApprovals: any[] = [];
+  // Fetch pending approvals for the dashboard badge/list
+  const pendingUsers = await prisma.user.findMany({
+    where: { status: 'PENDING' },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const pendingApprovals = pendingUsers.map(u => ({
+    id: u.id.slice(0, 8).toUpperCase(),
+    fullId: u.id,
+    type: 'Account',
+    cashier: u.name || u.email,
+    reason: `Sign-up via ${u.email.includes('@') ? 'Email/OAuth' : 'System'}`,
+    amount: 0,
+  }));
+
+  // Import at the top isn't strict string replacement because we're inside the function, 
+  // but let's wire up the buttons. Actually, server actions can be imported at the file top.
+  // I will add the import down below in a second pass if needed, but we can do inline forms.
 
   return (
     <div className="p-6 space-y-6">
@@ -157,18 +174,21 @@ export default async function ManagerDashboardPage() {
                     Pending
                   </span>
                 </div>
-                <p className="text-sm mb-1 font-medium">Cashier: {request.cashier}</p>
-                <p className="text-sm mb-2 font-bold">Amount: GH₵ {request.amount.toFixed(2)}</p>
+                <p className="text-sm mb-1 font-medium">User: {request.cashier}</p>
                 <p className="text-xs text-muted-foreground mb-3">{request.reason}</p>
                 <div className="flex gap-2">
-                  <button className="flex-1 px-3 py-2 bg-green-500/10 text-green-500 border border-green-500/20 rounded-lg hover:bg-green-500 hover:text-white transition-colors text-sm font-bold flex items-center justify-center gap-1">
-                    <CheckCircle className="w-4 h-4" />
-                    Approve
-                  </button>
-                  <button className="flex-1 px-3 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg hover:bg-red-500 hover:text-white transition-colors text-sm font-bold flex items-center justify-center gap-1">
-                    <XCircle className="w-4 h-4" />
-                    Deny
-                  </button>
+                  <form action={approveUser.bind(null, request.fullId)} className="flex-1">
+                    <Button type="submit" variant="outline" className="w-full bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500 hover:text-white">
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Approve
+                    </Button>
+                  </form>
+                  <form action={suspendUser.bind(null, request.fullId)} className="flex-1">
+                    <Button type="submit" variant="outline" className="w-full bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500 hover:text-white">
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Deny
+                    </Button>
+                  </form>
                 </div>
               </div>
             ))}
@@ -258,7 +278,7 @@ export default async function ManagerDashboardPage() {
 
       {/* Hourly Sales Chart */}
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-        <h2 className="mb-6 font-bold text-lg">Today's Hourly Performance Volume</h2>
+        <h2 className="mb-6 font-bold text-lg">Today&apos;s Hourly Performance Volume</h2>
         <div className="grid grid-cols-12 gap-2 sm:gap-4 items-end h-64 mt-4 px-2">
           {normalizedHourly.map((heightPercent, index) => {
             const hour = index + 8;

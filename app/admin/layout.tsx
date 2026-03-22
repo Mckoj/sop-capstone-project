@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSession, signOut } from '@/lib/auth-client';
-import { LayoutDashboard, Package, Users, BarChart3, LogOut, ShoppingCart, Box } from 'lucide-react';
+import { LayoutDashboard, Package, Users, BarChart3, LogOut, ShoppingCart, Box, List } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -28,6 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navItems = [
     { path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/admin/products', label: 'Products', icon: Package },
+    { path: '/admin/categories', label: 'Categories', icon: List },
     { path: '/admin/inventory', label: 'Inventory', icon: Box },
     { path: '/admin/customers', label: 'Customers', icon: Users },
     { path: '/admin/reports', label: 'Reports', icon: BarChart3 },

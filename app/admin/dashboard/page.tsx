@@ -134,7 +134,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="font-medium">{product.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {product.category}
+                    {product.category?.name}
                   </p>
                 </div>
                 <div className="text-right">

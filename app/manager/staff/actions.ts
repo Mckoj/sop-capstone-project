@@ -36,6 +36,7 @@ export async function createStaffMember(formData: FormData) {
         email,
         emailVerified: false,
         role: role.toUpperCase() as Role,
+        status: "ACTIVE",
         createdAt: new Date(),
         updatedAt: new Date(),
       },
@@ -62,5 +63,31 @@ export async function createStaffMember(formData: FormData) {
   } catch (err: any) {
     console.error("Error creating staff:", err);
     return { success: false, error: err.message || "An unexpected error occurred" };
+  }
+}
+
+export async function approveUser(userId: string) {
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { status: "ACTIVE" }
+    });
+    revalidatePath("/manager/staff");
+    revalidatePath("/manager");
+  } catch (err: any) {
+    console.error("Error approving user:", err);
+  }
+}
+
+export async function suspendUser(userId: string) {
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { status: "SUSPENDED" }
+    });
+    revalidatePath("/manager/staff");
+    revalidatePath("/manager");
+  } catch (err: any) {
+    console.error("Error suspending user:", err);
   }
 }

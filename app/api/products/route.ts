@@ -9,14 +9,21 @@ export async function GET() {
         price: true,
         quantity: true,
         barcode: true,
-        category: true,
+        category: {
+          select: { name: true }
+        },
       },
       orderBy: {
         name: 'asc',
       },
     });
 
-    return new Response(JSON.stringify(products), {
+    const mappedProducts = products.map(p => ({
+      ...p,
+      category: p.category?.name || 'Uncategorized',
+    }));
+
+    return new Response(JSON.stringify(mappedProducts), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });

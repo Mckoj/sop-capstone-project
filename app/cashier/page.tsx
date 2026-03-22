@@ -6,6 +6,7 @@ import { useSession, signOut } from '@/lib/auth-client';
 import { Search, Scan, ShoppingCart, CreditCard, Trash2, Plus, Minus, LogOut, User, CheckCircle } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
+
 const ReceiptDownloader = dynamic(() => import('./ReceiptDownloader'), { ssr: false });
 
 interface Product {
@@ -36,8 +37,12 @@ export default function CashierPage() {
 
   // Route protection
   useEffect(() => {
-    if (!isPending && !session) {
-      router.push('/');
+    if (!isPending) {
+      if (!session) {
+        router.replace('/');
+      } else if ((session.user as any).status === 'PENDING') {
+        router.replace('/account/pending');
+      }
     }
   }, [session, isPending, router]);
 
