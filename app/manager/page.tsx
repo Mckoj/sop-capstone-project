@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { approveUser, suspendUser } from './staff/actions';
 import { Button } from '@/components/ui/button';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 export default async function ManagerDashboardPage() {
   // 1. Define "Today" boundaries
@@ -15,7 +15,7 @@ export default async function ManagerDashboardPage() {
   endOfDay.setHours(23, 59, 59, 999);
 
   // 2. Fetch today's sales and global recent sales
-  const [todaysSales, recentSales] = await Promise.all([
+  const [todaysSales, recentSales, pendingUsers] = await Promise.all([
     prisma.sale.findMany({
       where: {
         createdAt: {
@@ -32,6 +32,10 @@ export default async function ManagerDashboardPage() {
       take: 5,
       orderBy: { createdAt: 'desc' },
       include: { user: true, items: true }
+    }),
+    prisma.user.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'desc' }
     })
   ]);
 
@@ -94,13 +98,9 @@ export default async function ManagerDashboardPage() {
     { label: 'Avg Transaction', value: `GH₵ ${avgTransaction.toFixed(2)}`, change: 'Live', icon: TrendingUp, color: 'text-orange-500' },
   ];
 
-  // Fetch pending approvals for the dashboard badge/list
-  const pendingUsers = await prisma.user.findMany({
-    where: { status: 'PENDING' },
-    orderBy: { createdAt: 'desc' }
-  });
-
-  const pendingApprovals = pendingUsers.map(u => ({
+  // PENDING users are now fetched in the initial parallel Promise.all to avoid a server data waterfall
+  
+  const pendingApprovals = pendingUsers.map((u: any) => ({
     id: u.id.slice(0, 8).toUpperCase(),
     fullId: u.id,
     type: 'Account',
@@ -163,7 +163,7 @@ export default async function ManagerDashboardPage() {
             <h3 className="text-orange-500 font-bold">Pending Approvals ({pendingApprovals.length})</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {pendingApprovals.map(request => (
+            {pendingApprovals.map((request: any) => (
               <div key={request.id} className="bg-card border border-border rounded-lg p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div>

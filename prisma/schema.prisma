@@ -96,7 +96,7 @@ model Category {
 model Product {
   id         String    @id @default(cuid())
   name       String
-  categoryId String
+  categoryId String    @default(cuid())
   price      Float
   quantity   Int
   barcode    String    @unique
@@ -104,6 +104,8 @@ model Product {
 
   category   Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   saleItems  SaleItem[]
+  
+  @@index([categoryId])
   @@map("product")
 }
 
@@ -114,6 +116,9 @@ model Sale {
   userId      String
   user        User     @relation(fields: [userId], references: [id])
   items       SaleItem[]
+  
+  @@index([userId])
+  @@index([createdAt])
   @@map("sale")
 }
 
@@ -126,5 +131,8 @@ model SaleItem {
 
   sale    Sale    @relation(fields: [saleId], references: [id])
   product Product @relation(fields: [productId], references: [id])
+  
+  @@index([saleId])
+  @@index([productId])
   @@map("sale_item")
 }

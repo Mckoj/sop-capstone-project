@@ -133,7 +133,7 @@ export default async function StaffPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {pendingStaff.map(staff => (
               <div key={staff.id} className="bg-card border border-orange-500/20 rounded-xl p-4 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-orange-500/20 to-transparent pointer-events-none" />
+                <div className="absolute top-0 right-0 w-16 h-16 bg-linear-to-bl from-orange-500/20 to-transparent pointer-events-none" />
                 
                 <h3 className="font-bold text-lg">{staff.name}</h3>
                 <p className="text-sm text-muted-foreground mb-3">{staff.email}</p>

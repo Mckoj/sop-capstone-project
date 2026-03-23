@@ -1,13 +1,25 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useSession, signOut } from '@/lib/auth-client';
-import { Search, Scan, ShoppingCart, CreditCard, Trash2, Plus, Minus, LogOut, User, CheckCircle } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useSession, signOut } from "@/lib/auth-client";
+import {
+  Search,
+  Scan,
+  ShoppingCart,
+  CreditCard,
+  Trash2,
+  Plus,
+  Minus,
+  LogOut,
+  User,
+  CheckCircle,
+} from "lucide-react";
+import dynamic from "next/dynamic";
 
-
-const ReceiptDownloader = dynamic(() => import('./ReceiptDownloader'), { ssr: false });
+const ReceiptDownloader = dynamic(() => import("./ReceiptDownloader"), {
+  ssr: false,
+});
 
 interface Product {
   id: string;
@@ -25,38 +37,31 @@ interface CartItem {
 
 export default function CashierPage() {
   const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [barcode, setBarcode] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [barcode, setBarcode] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mobile'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<
+    "cash" | "card" | "mobile"
+  >("cash");
   const [completedSaleData, setCompletedSaleData] = useState<any>(null);
   const { data: session, isPending } = useSession();
 
-  // Route protection
-  useEffect(() => {
-    if (!isPending) {
-      if (!session) {
-        router.replace('/');
-      } else if ((session.user as any).status === 'PENDING') {
-        router.replace('/account/pending');
-      }
-    }
-  }, [session, isPending, router]);
+  // Route protection is securely handled by middleware.ts
 
   // Fetch products from database
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const res = await fetch('/api/products');
+        const res = await fetch("/api/products");
         if (res.ok) {
           const data = await res.json();
           setProducts(data);
         }
       } catch (error) {
-        console.error('Error fetching products:', error);
+        console.error("Error fetching products:", error);
       } finally {
         setLoading(false);
       }
@@ -66,29 +71,32 @@ export default function CashierPage() {
   }, []);
 
   // Filter products based on search
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.category.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredProducts = products.filter(
+    (p) =>
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.category.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // Add product to cart
   const addToCart = (product: Product) => {
     if (product.quantity <= 0) {
-      alert('Product out of stock');
+      alert("Product out of stock");
       return;
     }
 
-    const existingItem = cart.find(item => item.product.id === product.id);
-    
+    const existingItem = cart.find((item) => item.product.id === product.id);
+
     if (existingItem) {
       if (existingItem.quantity < product.quantity) {
-        setCart(cart.map(item =>
-          item.product.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        ));
+        setCart(
+          cart.map((item) =>
+            item.product.id === product.id
+              ? { ...item, quantity: item.quantity + 1 }
+              : item,
+          ),
+        );
       } else {
-        alert('Not enough stock available');
+        alert("Not enough stock available");
       }
     } else {
       setCart([...cart, { product, quantity: 1 }]);
@@ -98,37 +106,42 @@ export default function CashierPage() {
   // Search by barcode
   const handleBarcodeSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const product = products.find(p => p.barcode === barcode);
+    const product = products.find((p) => p.barcode === barcode);
     if (product) {
       addToCart(product);
-      setBarcode('');
+      setBarcode("");
     } else {
-      alert('Product not found');
+      alert("Product not found");
     }
   };
 
   // Update quantity
   const updateQuantity = (productId: string, delta: number) => {
-    setCart(cart.map(item => {
-      if (item.product.id === productId) {
-        const newQuantity = Math.max(1, item.quantity + delta);
-        if (newQuantity > item.product.quantity) {
-          alert('Not enough stock available');
-          return item;
+    setCart(
+      cart.map((item) => {
+        if (item.product.id === productId) {
+          const newQuantity = Math.max(1, item.quantity + delta);
+          if (newQuantity > item.product.quantity) {
+            alert("Not enough stock available");
+            return item;
+          }
+          return { ...item, quantity: newQuantity };
         }
-        return { ...item, quantity: newQuantity };
-      }
-      return item;
-    }));
+        return item;
+      }),
+    );
   };
 
   // Remove from cart
   const removeFromCart = (productId: string) => {
-    setCart(cart.filter(item => item.product.id !== productId));
+    setCart(cart.filter((item) => item.product.id !== productId));
   };
 
   // Calculate totals
-  const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const subtotal = cart.reduce(
+    (sum, item) => sum + item.product.price * item.quantity,
+    0,
+  );
   const tax = subtotal * 0.125; // 12.5% tax
   const total = subtotal + tax;
 
@@ -142,11 +155,11 @@ export default function CashierPage() {
   const handlePaymentComplete = async () => {
     try {
       // Create sale in database
-      const res = await fetch('/api/sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: cart.map(item => ({
+          items: cart.map((item) => ({
             productId: item.product.id,
             quantity: item.quantity,
             price: item.product.price,
@@ -166,31 +179,29 @@ export default function CashierPage() {
           tax,
           total,
           paymentMethod,
-          date: new Date().toLocaleString()
+          date: new Date().toLocaleString(),
         });
-        
+
         // Empty ongoing cart but leave Modal open for Receipt Download Stage
         setCart([]);
-        
+
         // Refresh products to update quantities
-        const productsRes = await fetch('/api/products');
+        const productsRes = await fetch("/api/products");
         if (productsRes.ok) {
           setProducts(await productsRes.json());
         }
       }
     } catch (error) {
-      console.error('Error processing payment:', error);
-      alert('Error processing payment');
+      console.error("Error processing payment:", error);
+      alert("Error processing payment");
     }
   };
-
-
 
   const handleLogout = async () => {
     await signOut({
       fetchOptions: {
         onSuccess: () => {
-          router.push('/');
+          router.push("/");
         },
       },
     });
@@ -277,7 +288,7 @@ export default function CashierPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-                {filteredProducts.map(product => (
+                {filteredProducts.map((product) => (
                   <button
                     key={product.id}
                     onClick={() => addToCart(product)}
@@ -286,13 +297,21 @@ export default function CashierPage() {
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1 min-w-0">
-                        <h3 className="truncate mb-1 font-medium">{product.name}</h3>
-                        <p className="text-sm text-muted-foreground">{product.category}</p>
+                        <h3 className="truncate mb-1 font-medium">
+                          {product.name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {product.category}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <p className="font-semibold text-primary">GH₵ {product.price.toFixed(2)}</p>
-                      <p className="text-xs text-muted-foreground">Stock: {product.quantity}</p>
+                      <p className="font-semibold text-primary">
+                        GH₵ {product.price.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Stock: {product.quantity}
+                      </p>
                     </div>
                   </button>
                 ))}
@@ -306,7 +325,9 @@ export default function CashierPage() {
           {/* Cart Header */}
           <div className="px-6 py-4 border-b border-border">
             <h2 className="font-bold text-lg">Current Order</h2>
-            <p className="text-sm text-muted-foreground">{cart.length} item(s)</p>
+            <p className="text-sm text-muted-foreground">
+              {cart.length} item(s)
+            </p>
           </div>
 
           {/* Cart Items */}
@@ -315,15 +336,24 @@ export default function CashierPage() {
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <ShoppingCart className="w-12 h-12 text-muted-foreground mb-3" />
                 <p className="text-muted-foreground">Cart is empty</p>
-                <p className="text-sm text-muted-foreground">Add products to start a sale</p>
+                <p className="text-sm text-muted-foreground">
+                  Add products to start a sale
+                </p>
               </div>
             ) : (
-              cart.map(item => (
-                <div key={item.product.id} className="bg-background border border-border rounded-lg p-3">
+              cart.map((item) => (
+                <div
+                  key={item.product.id}
+                  className="bg-background border border-border rounded-lg p-3"
+                >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0 mr-2">
-                      <h4 className="truncate font-medium">{item.product.name}</h4>
-                      <p className="text-sm text-muted-foreground">GH₵ {item.product.price.toFixed(2)}</p>
+                      <h4 className="truncate font-medium">
+                        {item.product.name}
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        GH₵ {item.product.price.toFixed(2)}
+                      </p>
                     </div>
                     <button
                       onClick={() => removeFromCart(item.product.id)}
@@ -348,7 +378,9 @@ export default function CashierPage() {
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
-                    <p className="font-semibold">GH₵ {(item.product.price * item.quantity).toFixed(2)}</p>
+                    <p className="font-semibold">
+                      GH₵ {(item.product.price * item.quantity).toFixed(2)}
+                    </p>
                   </div>
                 </div>
               ))
@@ -367,7 +399,9 @@ export default function CashierPage() {
             </div>
             <div className="flex justify-between pt-3 border-t border-border">
               <span className="font-semibold">Total</span>
-              <span className="font-semibold text-primary text-lg">GH₵ {total.toFixed(2)}</span>
+              <span className="font-semibold text-primary text-lg">
+                GH₵ {total.toFixed(2)}
+              </span>
             </div>
 
             <button
@@ -391,7 +425,7 @@ export default function CashierPage() {
                 <div className="px-6 py-4 border-b border-border">
                   <h3 className="text-xl font-bold">Payment Method</h3>
                 </div>
-                
+
                 <div className="p-6 space-y-4">
                   <div className="space-y-3">
                     <label className="flex items-center gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-secondary">
@@ -399,8 +433,12 @@ export default function CashierPage() {
                         type="radio"
                         name="payment"
                         value="cash"
-                        checked={paymentMethod === 'cash'}
-                        onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'card' | 'mobile')}
+                        checked={paymentMethod === "cash"}
+                        onChange={(e) =>
+                          setPaymentMethod(
+                            e.target.value as "cash" | "card" | "mobile",
+                          )
+                        }
                       />
                       <span className="font-medium">Cash</span>
                     </label>
@@ -409,8 +447,12 @@ export default function CashierPage() {
                         type="radio"
                         name="payment"
                         value="card"
-                        checked={paymentMethod === 'card'}
-                        onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'card' | 'mobile')}
+                        checked={paymentMethod === "card"}
+                        onChange={(e) =>
+                          setPaymentMethod(
+                            e.target.value as "cash" | "card" | "mobile",
+                          )
+                        }
                       />
                       <span className="font-medium">Card</span>
                     </label>
@@ -419,16 +461,24 @@ export default function CashierPage() {
                         type="radio"
                         name="payment"
                         value="mobile"
-                        checked={paymentMethod === 'mobile'}
-                        onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'card' | 'mobile')}
+                        checked={paymentMethod === "mobile"}
+                        onChange={(e) =>
+                          setPaymentMethod(
+                            e.target.value as "cash" | "card" | "mobile",
+                          )
+                        }
                       />
                       <span className="font-medium">Mobile Money</span>
                     </label>
                   </div>
 
                   <div className="pt-4 border-t border-border">
-                    <p className="text-sm text-muted-foreground mb-2 font-semibold">Total Amount</p>
-                    <p className="text-3xl font-bold text-primary">GH₵ {total.toFixed(2)}</p>
+                    <p className="text-sm text-muted-foreground mb-2 font-semibold">
+                      Total Amount
+                    </p>
+                    <p className="text-3xl font-bold text-primary">
+                      GH₵ {total.toFixed(2)}
+                    </p>
                   </div>
 
                   <div className="flex gap-3 pt-4">
@@ -453,12 +503,17 @@ export default function CashierPage() {
                   <CheckCircle className="w-8 h-8" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold mb-2">Payment Successful!</h3>
-                  <p className="text-muted-foreground font-medium">The transaction has been safely recorded in the live database.</p>
+                  <h3 className="text-2xl font-bold mb-2">
+                    Payment Successful!
+                  </h3>
+                  <p className="text-muted-foreground font-medium">
+                    The transaction has been safely recorded in the live
+                    database.
+                  </p>
                 </div>
-                <ReceiptDownloader 
-                  completedSaleData={completedSaleData} 
-                  onDone={() => setShowPaymentModal(false)} 
+                <ReceiptDownloader
+                  completedSaleData={completedSaleData}
+                  onDone={() => setShowPaymentModal(false)}
                 />
               </div>
             )}
@@ -468,5 +523,3 @@ export default function CashierPage() {
     </div>
   );
 }
-
- 

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useSession, signOut } from '@/lib/auth-client';
 import { LayoutDashboard, Package, Users, BarChart3, LogOut, ShoppingCart, Box, List } from 'lucide-react';
 
@@ -9,11 +10,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const { data: session, isPending } = useSession();
 
-  useEffect(() => {
-    if (!isPending && !session) {
-      router.push('/');
-    }
-  }, [session, isPending, router]);
+  // Note: Route protection is now strictly enforced at the edge by middleware.ts
 
   const handleLogout = async () => {
     await signOut({
@@ -62,12 +59,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Users className="w-4 h-4" />
             <span>Admin: {session.user?.name || 'User'}</span>
           </div>
-          <button
-            onClick={() => router.push('/cashier')}
-            className="px-4 py-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 rounded-lg transition-colors text-sm"
+          <Link
+            href="/cashier"
+            className="px-4 py-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 rounded-lg transition-colors text-sm text-center"
           >
             Switch to Cashier
-          </button>
+          </Link>
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors text-sm text-white"
@@ -87,9 +84,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               const active = isActive(item.path);
               
               return (
-                <button
+                <Link
                   key={item.path}
-                  onClick={() => router.push(item.path)}
+                  href={item.path}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                     active
                       ? 'bg-primary text-primary-foreground'
@@ -98,7 +95,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 >
                   <Icon className="w-5 h-5" />
                   <span>{item.label}</span>
-                </button>
+                </Link>
               );
             })}
           </nav>

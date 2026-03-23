@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useSession, signOut } from '@/lib/auth-client';
 import { LayoutDashboard, Users, Receipt, DollarSign, LogOut, ShoppingCart, BarChart3 } from 'lucide-react';
 
@@ -9,15 +10,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const { data: session, isPending } = useSession();
 
-  useEffect(() => {
-    if (!isPending) {
-      if (!session) {
-        router.push('/');
-      } else if ((session.user as any).status === 'PENDING') {
-        router.push('/account/pending');
-      }
-    }
-  }, [session, isPending, router]);
+  // Note: Route protection is now handled instantly at the edge by middleware.ts
 
   const handleLogout = async () => {
     await signOut({
@@ -65,12 +58,12 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
             <Users className="w-4 h-4" />
             <span>Manager: {session.user?.name || 'User'}</span>
           </div>
-          <button
-            onClick={() => router.push('/cashier')}
-            className="px-4 py-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 rounded-lg transition-colors text-sm"
+          <Link
+            href="/cashier"
+            className="px-4 py-2 bg-primary-foreground/10 hover:bg-primary-foreground/20 rounded-lg transition-colors text-sm text-center"
           >
             Switch to Cashier
-          </button>
+          </Link>
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm"
@@ -90,9 +83,9 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
               const active = isActive(item.path);
               
               return (
-                <button
+                <Link
                   key={item.path}
-                  onClick={() => router.push(item.path)}
+                  href={item.path}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                     active
                       ? 'bg-primary text-primary-foreground'
@@ -101,7 +94,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
                 >
                   <Icon className="w-5 h-5" />
                   <span>{item.label}</span>
-                </button>
+                </Link>
               );
             })}
           </nav>

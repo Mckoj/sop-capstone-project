@@ -2,27 +2,38 @@ import { getSessionCookie } from "better-auth/cookies"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function proxy(request: NextRequest) {
-    const sessionCookie = getSessionCookie(request)
-    const { pathname, search } = request.nextUrl
+    const sessionCookie = getSessionCookie(request);
+    const { pathname, search } = request.nextUrl;
     
-    // Protect cashier and manager routes
-    const isProtected = pathname.startsWith('/cashier') || pathname.startsWith('/manager')
+    // Protect routes
+    const isProtected = pathname.startsWith('/cashier') || pathname.startsWith('/manager') || pathname.startsWith('/admin');
 
-    if (isProtected && !sessionCookie) {
-        const redirectTo = pathname + search
-        return NextResponse.redirect(
-            new URL(`/auth/sign-in?redirectTo=${redirectTo}`, request.url)
-        )
+    if (isProtected) {
+        if (!sessionCookie) {
+            return NextResponse.redirect(new URL(`/`, request.url));
+        }
+
+        try {
+            // Check session via standard fetch to resolve PENDING status natively on the edge
+            // This prevents React FOUC (Flash of Unauthenticated Content)
+            const res = await fetch(`${request.nextUrl.origin}/api/auth/get-session`, {
+                headers: { cookie: request.headers.get("cookie") || "" },
+            });
+            
+            if (res.ok) {
+                const sessionData = await res.json();
+                if (sessionData && sessionData.user?.status === 'PENDING') {
+                    return NextResponse.redirect(new URL('/account/pending', request.url));
+                }
+            }
+        } catch (e) {
+            // Fallback gracefully
+        }
     }
-
-    // Note: To properly enforce PENDING status at the proxy level without making a DB call
-    // on every edge request, we will rely on route-level layouts for the explicit PENDING redirect,
-    // but we ensure the user is logged in first here.
 
     return NextResponse.next()
 }
 
 export const config = {
-    // Protected routes
-    matcher: ["/cashier/:path*", "/manager/:path*", "/account/:path*"]
-}
+    matcher: ["/cashier/:path*", "/manager/:path*", "/admin/:path*", "/account/:path*"]
+}

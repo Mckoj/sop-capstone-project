@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import ReportsClient from "@/app/manager/reports/ReportsClient";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export default async function ReportsPage() {
   // 1. Define trailing 7 days boundary

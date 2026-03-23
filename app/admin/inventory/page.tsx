@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { Box, AlertTriangle } from "lucide-react";
 import RestockAction from "./RestockAction";
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 30;
 
 export default async function InventoryTab() {
   // Order by quantity ascending to highlight low stock automatically
