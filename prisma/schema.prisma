@@ -108,12 +108,15 @@ model Product {
 }
 
 model Sale {
-  id          String   @id @default(cuid())
-  totalAmount Float
-  createdAt   DateTime @default(now())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  items       SaleItem[]
+  id            String   @id @default(cuid())
+  totalAmount   Float
+  paymentMethod String   @default("cash")
+  paymentStatus String   @default("paid")
+  paystackRef   String?
+  createdAt     DateTime @default(now())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  items         SaleItem[]
   @@map("sale")
 }
 

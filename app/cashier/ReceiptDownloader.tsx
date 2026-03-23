@@ -3,6 +3,7 @@
 import { Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
 
 interface Props {
   completedSaleData: any;
@@ -10,23 +11,25 @@ interface Props {
 }
 
 export default function ReceiptDownloader({ completedSaleData, onDone }: Props) {
-  const generateReceiptPDF = () => {
+  const generateReceiptPDF = async () => {
     if (!completedSaleData) return;
 
     const doc = new jsPDF({ format: 'a5' });
-    
+    const isCash = completedSaleData.paymentMethod === 'cash';
+
     // Header
     doc.setFontSize(22);
     doc.setFont('helvetica', 'bold');
     doc.text('Yenpoobi', 74, 20, { align: 'center' });
-    
+
     doc.setFontSize(14);
     doc.setFont('helvetica', 'normal');
     doc.text('Sales Receipt', 74, 30, { align: 'center' });
-    
+
     doc.setFontSize(10);
     doc.text(`Date: ${completedSaleData.date}`, 14, 45);
     doc.text(`Payment: ${completedSaleData.paymentMethod.toUpperCase()}`, 14, 52);
+    doc.text(`Status: ${isCash ? 'PAID' : 'PENDING PAYMENT'}`, 14, 59);
 
     // Items Table
     const tableColumn = ["Item", "Qty", "Price", "Total"];
@@ -38,16 +41,16 @@ export default function ReceiptDownloader({ completedSaleData, onDone }: Props) 
     ]);
 
     autoTable(doc, {
-      startY: 60,
+      startY: 66,
       head: [tableColumn],
       body: tableRows,
       theme: 'grid',
       headStyles: { fillColor: [37, 99, 235] },
-      margin: { top: 60 }
+      margin: { top: 66 }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY || 60;
-    
+    const finalY = (doc as any).lastAutoTable.finalY || 66;
+
     // Summary
     const summaryXLabel = 95;
     const summaryXValue = 134;
@@ -55,11 +58,10 @@ export default function ReceiptDownloader({ completedSaleData, onDone }: Props) 
     doc.setFontSize(10);
     doc.text('Subtotal:', summaryXLabel, finalY + 10);
     doc.text(`GH₵ ${completedSaleData.subtotal.toFixed(2)}`, summaryXValue, finalY + 10, { align: 'right' });
-    
+
     doc.text('Tax (12.5%):', summaryXLabel, finalY + 16);
     doc.text(`GH₵ ${completedSaleData.tax.toFixed(2)}`, summaryXValue, finalY + 16, { align: 'right' });
-    
-    // Draw a subtle line above total
+
     doc.setDrawColor(200, 200, 200);
     doc.line(summaryXLabel, finalY + 20, summaryXValue, finalY + 20);
 
@@ -68,9 +70,46 @@ export default function ReceiptDownloader({ completedSaleData, onDone }: Props) 
     doc.text('Total:', summaryXLabel, finalY + 27);
     doc.text(`GH₵ ${completedSaleData.total.toFixed(2)}`, summaryXValue, finalY + 27, { align: 'right' });
 
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'italic');
-    doc.text('Thank you for shopping at Yenpoobi!', 74, finalY + 45, { align: 'center' });
+    // QR Code for non-cash payments
+    if (!isCash && completedSaleData.paystackUrl) {
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Scan to Pay', 74, finalY + 42, { align: 'center' });
+
+      try {
+        const qrDataUrl = await QRCode.toDataURL(completedSaleData.paystackUrl, {
+          width: 150,
+          margin: 1,
+        });
+
+        // Add QR code image centered
+        doc.addImage(qrDataUrl, 'PNG', 37, finalY + 46, 74, 74);
+
+        // Add the link below QR code
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(37, 99, 235);
+        doc.text(completedSaleData.paystackUrl, 74, finalY + 126, {
+          align: 'center',
+          maxWidth: 120,
+        });
+        doc.setTextColor(0, 0, 0);
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'italic');
+        doc.text('Pay with MoMo, Card or Bank — scan or visit the link above', 74, finalY + 134, { align: 'center' });
+        doc.text('Thank you for shopping at Yenpoobi!', 74, finalY + 141, { align: 'center' });
+      } catch (err) {
+        console.error('QR generation failed:', err);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'italic');
+        doc.text('Thank you for shopping at Yenpoobi!', 74, finalY + 45, { align: 'center' });
+      }
+    } else {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'italic');
+      doc.text('Thank you for shopping at Yenpoobi!', 74, finalY + 45, { align: 'center' });
+    }
 
     doc.save('yenpoobi_receipt.pdf');
   };
