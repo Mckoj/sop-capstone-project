@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signOut } from '@/lib/auth-client';
-import { Search, Scan, ShoppingCart, CreditCard, Trash2, Plus, Minus, LogOut, User, CheckCircle } from 'lucide-react';
+import { Search, Scan, ShoppingCart, CreditCard, Trash2, Plus, Minus, LogOut, User, CheckCircle, Clock, XCircle } from 'lucide-react';
 import dynamic from 'next/dynamic';
-
 
 const ReceiptDownloader = dynamic(() => import('./ReceiptDownloader'), { ssr: false });
 
@@ -23,6 +22,20 @@ interface CartItem {
   quantity: number;
 }
 
+interface Sale {
+  id: string;
+  totalAmount: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  createdAt: string;
+}
+
+interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'info';
+}
+
 export default function CashierPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,6 +46,10 @@ export default function CashierPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'mobile'>('cash');
   const [completedSaleData, setCompletedSaleData] = useState<any>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [recentSales, setRecentSales] = useState<Sale[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const previousSalesRef = useRef<Sale[]>([]);
   const { data: session, isPending } = useSession();
 
   // Route protection
@@ -61,9 +78,55 @@ export default function CashierPage() {
         setLoading(false);
       }
     };
-
     fetchProducts();
   }, []);
+
+  // Show toast helper
+  const showToast = (message: string, type: 'success' | 'info' = 'success') => {
+    const id = `${Date.now()}`;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
+
+  // Poll for sales status updates every 5 seconds
+  useEffect(() => {
+    if (!session) return;
+
+    const fetchSales = async () => {
+      try {
+        const res = await fetch('/api/sales');
+        if (res.ok) {
+          const data: Sale[] = await res.json();
+          const todaySales = data.filter(s => {
+            const saleDate = new Date(s.createdAt).toDateString();
+            return saleDate === new Date().toDateString();
+          });
+
+          // Check if any previously pending sale is now paid
+          const prev = previousSalesRef.current;
+          if (prev.length > 0) {
+            todaySales.forEach(sale => {
+              const prevSale = prev.find(p => p.id === sale.id);
+              if (prevSale && prevSale.paymentStatus === 'pending' && sale.paymentStatus === 'paid') {
+                showToast(`💳 Payment confirmed! GH₵ ${sale.totalAmount.toFixed(2)} via ${sale.paymentMethod.toUpperCase()}`, 'success');
+              }
+            });
+          }
+
+          previousSalesRef.current = todaySales;
+          setRecentSales(todaySales);
+        }
+      } catch (error) {
+        console.error('Error fetching sales:', error);
+      }
+    };
+
+    fetchSales();
+    const interval = setInterval(fetchSales, 5000);
+    return () => clearInterval(interval);
+  }, [session]);
 
   // Filter products based on search
   const filteredProducts = products.filter(p =>
@@ -77,9 +140,7 @@ export default function CashierPage() {
       alert('Product out of stock');
       return;
     }
-
     const existingItem = cart.find(item => item.product.id === product.id);
-    
     if (existingItem) {
       if (existingItem.quantity < product.quantity) {
         setCart(cart.map(item =>
@@ -129,7 +190,7 @@ export default function CashierPage() {
 
   // Calculate totals
   const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-  const tax = subtotal * 0.125; // 12.5% tax
+  const tax = subtotal * 0.125;
   const total = subtotal + tax;
 
   const handleCheckout = () => {
@@ -140,8 +201,33 @@ export default function CashierPage() {
   };
 
   const handlePaymentComplete = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
     try {
-      // Create sale in database
+      let paystackUrl = null;
+      let paystackRef = null;
+
+      if (paymentMethod !== 'cash') {
+        const paystackRes = await fetch('/api/paystack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: total,
+            email: (session?.user as any)?.email || 'customer@yenpoobi.com',
+            saleReference: `sale_${Date.now()}`,
+          }),
+        });
+
+        if (!paystackRes.ok) {
+          alert('Failed to generate payment link. Please try again.');
+          return;
+        }
+
+        const paystackData = await paystackRes.json();
+        paystackUrl = paystackData.authorization_url;
+        paystackRef = paystackData.reference;
+      }
+
       const res = await fetch('/api/sales', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -155,24 +241,39 @@ export default function CashierPage() {
           tax,
           total,
           paymentMethod,
+          paymentStatus: paymentMethod === 'cash' ? 'paid' : 'pending',
+          paystackRef,
         }),
       });
 
       if (res.ok) {
-        // Cache the sale configuration to generate the receipt PDF visually
+        const saleData = await res.json();
+
+        // Immediately register as pending in ref so polling can detect paid transition
+        if (paymentMethod !== 'cash') {
+          previousSalesRef.current = [
+            { 
+              id: saleData.id, 
+              totalAmount: total, 
+              paymentMethod, 
+              paymentStatus: 'pending', 
+              createdAt: new Date().toISOString() 
+            },
+            ...previousSalesRef.current
+          ];
+        }
+
         setCompletedSaleData({
           items: [...cart],
           subtotal,
           tax,
           total,
           paymentMethod,
+          paystackUrl,
           date: new Date().toLocaleString()
         });
-        
-        // Empty ongoing cart but leave Modal open for Receipt Download Stage
+
         setCart([]);
-        
-        // Refresh products to update quantities
         const productsRes = await fetch('/api/products');
         if (productsRes.ok) {
           setProducts(await productsRes.json());
@@ -181,10 +282,10 @@ export default function CashierPage() {
     } catch (error) {
       console.error('Error processing payment:', error);
       alert('Error processing payment');
+    } finally {
+      setIsProcessing(false);
     }
   };
-
-
 
   const handleLogout = async () => {
     await signOut({
@@ -206,6 +307,20 @@ export default function CashierPage() {
 
   return (
     <div className="h-screen flex flex-col bg-background">
+
+      {/* Toast Notifications */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className="flex items-center gap-3 px-4 py-3 bg-green-500 text-white rounded-lg shadow-lg animate-in slide-in-from-right"
+          >
+            <CheckCircle className="w-5 h-5 shrink-0" />
+            <span className="font-medium text-sm">{toast.message}</span>
+          </div>
+        ))}
+      </div>
+
       {/* Header */}
       <div className="bg-primary text-primary-foreground px-6 py-4 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
@@ -232,7 +347,6 @@ export default function CashierPage() {
         <div className="flex-1 flex flex-col p-6 overflow-hidden">
           {/* Search and Barcode */}
           <div className="mb-4 space-y-3">
-            {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
@@ -243,8 +357,6 @@ export default function CashierPage() {
                 className="w-full pl-11 pr-4 py-3 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
-
-            {/* Barcode Scanner */}
             <form onSubmit={handleBarcodeSearch} className="flex gap-2">
               <div className="relative flex-1">
                 <Scan className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -299,17 +411,44 @@ export default function CashierPage() {
               </div>
             )}
           </div>
+
+          {/* Recent Transactions Panel */}
+          {recentSales.length > 0 && (
+            <div className="mt-4 border-t border-border pt-4">
+              <h3 className="text-sm font-bold text-muted-foreground mb-3">TODAY'S TRANSACTIONS</h3>
+              <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
+                {recentSales.slice(0, 8).map(sale => (
+                  <div key={sale.id} className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      {sale.paymentStatus === 'paid' ? (
+                        <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                      ) : (
+                        <Clock className="w-4 h-4 text-yellow-500 shrink-0" />
+                      )}
+                      <span className="text-sm font-medium">GH₵ {sale.totalAmount.toFixed(2)}</span>
+                      <span className="text-xs text-muted-foreground">{sale.paymentMethod.toUpperCase()}</span>
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      sale.paymentStatus === 'paid'
+                        ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                        : 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
+                    }`}>
+                      {sale.paymentStatus.toUpperCase()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Panel - Cart */}
         <div className="w-105 bg-card border-l border-border flex flex-col">
-          {/* Cart Header */}
           <div className="px-6 py-4 border-b border-border">
             <h2 className="font-bold text-lg">Current Order</h2>
             <p className="text-sm text-muted-foreground">{cart.length} item(s)</p>
           </div>
 
-          {/* Cart Items */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
@@ -355,7 +494,6 @@ export default function CashierPage() {
             )}
           </div>
 
-          {/* Cart Summary */}
           <div className="border-t border-border px-6 py-4 space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
@@ -369,7 +507,6 @@ export default function CashierPage() {
               <span className="font-semibold">Total</span>
               <span className="font-semibold text-primary text-lg">GH₵ {total.toFixed(2)}</span>
             </div>
-
             <button
               onClick={handleCheckout}
               disabled={cart.length === 0}
@@ -391,7 +528,6 @@ export default function CashierPage() {
                 <div className="px-6 py-4 border-b border-border">
                   <h3 className="text-xl font-bold">Payment Method</h3>
                 </div>
-                
                 <div className="p-6 space-y-4">
                   <div className="space-y-3">
                     <label className="flex items-center gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-secondary">
@@ -425,12 +561,10 @@ export default function CashierPage() {
                       <span className="font-medium">Mobile Money</span>
                     </label>
                   </div>
-
                   <div className="pt-4 border-t border-border">
                     <p className="text-sm text-muted-foreground mb-2 font-semibold">Total Amount</p>
                     <p className="text-3xl font-bold text-primary">GH₵ {total.toFixed(2)}</p>
                   </div>
-
                   <div className="flex gap-3 pt-4">
                     <button
                       onClick={() => setShowPaymentModal(false)}
@@ -440,9 +574,10 @@ export default function CashierPage() {
                     </button>
                     <button
                       onClick={handlePaymentComplete}
-                      className="flex-1 py-2 px-4 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-colors font-semibold"
+                      disabled={isProcessing}
+                      className="flex-1 py-2 px-4 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Complete Payment
+                      {isProcessing ? 'Processing...' : 'Complete Payment'}
                     </button>
                   </div>
                 </div>
@@ -456,9 +591,9 @@ export default function CashierPage() {
                   <h3 className="text-2xl font-bold mb-2">Payment Successful!</h3>
                   <p className="text-muted-foreground font-medium">The transaction has been safely recorded in the live database.</p>
                 </div>
-                <ReceiptDownloader 
-                  completedSaleData={completedSaleData} 
-                  onDone={() => setShowPaymentModal(false)} 
+                <ReceiptDownloader
+                  completedSaleData={completedSaleData}
+                  onDone={() => setShowPaymentModal(false)}
                 />
               </div>
             )}
@@ -468,5 +603,3 @@ export default function CashierPage() {
     </div>
   );
 }
-
- 

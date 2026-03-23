@@ -13,7 +13,9 @@ interface SaleRequest {
   subtotal: number;
   tax: number;
   total: number;
-  paymentMethod: 'cash' | 'card';
+  paymentMethod: 'cash' | 'card' | 'mobile';
+  paymentStatus?: string;
+  paystackRef?: string;
 }
 
 export async function POST(req: Request) {
@@ -31,17 +33,18 @@ export async function POST(req: Request) {
 
     const body: SaleRequest = await req.json();
 
-    // Validate request
     if (!body.items || body.items.length === 0) {
       return new Response(JSON.stringify({ error: 'No items in sale' }), {
         status: 400,
       });
     }
 
-    // Create sale with items
     const sale = await prisma.sale.create({
       data: {
         totalAmount: body.total,
+        paymentMethod: body.paymentMethod,
+        paymentStatus: body.paymentStatus || 'paid',
+        paystackRef: body.paystackRef || null,
         userId: session.user.id,
         items: {
           create: body.items.map(item => ({
@@ -56,7 +59,6 @@ export async function POST(req: Request) {
       },
     });
 
-    // Update product quantities
     for (const item of body.items) {
       await prisma.product.update({
         where: { id: item.productId },
