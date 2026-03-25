@@ -22,31 +22,31 @@ export default function ReceiptDownloader({ completedSaleData, onDone }: Props) 
     doc.setFont('helvetica', 'bold');
     doc.text('Yenpoobi', 74, 20, { align: 'center' });
 
-    doc.setFontSize(14);
+    doc.setFontSize(12);
     doc.setFont('helvetica', 'normal');
-    doc.text('Sales Receipt', 74, 30, { align: 'center' });
+    doc.text('Sales Receipt', 74, 25, { align: 'center' });
 
     doc.setFontSize(10);
     doc.text(`Date: ${completedSaleData.date}`, 14, 45);
     doc.text(`Payment: ${completedSaleData.paymentMethod.toUpperCase()}`, 14, 52);
-    doc.text(`Status: ${isCash ? 'PAID' : 'PENDING PAYMENT'}`, 14, 59);
+    //doc.text(`Status: ${isCash ? 'PAID' : 'PENDING PAYMENT'}`, 14, 59);
 
     // Items Table
     const tableColumn = ["Item", "Qty", "Price", "Total"];
     const tableRows = completedSaleData.items.map((item: any) => [
       item.product.name,
       item.quantity.toString(),
-      `GH₵ ${item.product.price.toFixed(2)}`,
-      `GH₵ ${(item.quantity * item.product.price).toFixed(2)}`
+      `GHS ${item.product.price.toFixed(2)}`,
+      `GHS ${(item.quantity * item.product.price).toFixed(2)}`
     ]);
 
     autoTable(doc, {
-      startY: 66,
+      startY: 56,
       head: [tableColumn],
       body: tableRows,
-      theme: 'grid',
+      theme: 'striped',
       headStyles: { fillColor: [37, 99, 235] },
-      margin: { top: 66 }
+      margin: { top: 56 }
     });
 
     const finalY = (doc as any).lastAutoTable.finalY || 66;
@@ -57,18 +57,17 @@ export default function ReceiptDownloader({ completedSaleData, onDone }: Props) 
 
     doc.setFontSize(10);
     doc.text('Subtotal:', summaryXLabel, finalY + 10);
-    doc.text(`GH₵ ${completedSaleData.subtotal.toFixed(2)}`, summaryXValue, finalY + 10, { align: 'right' });
+    doc.text(`GHS ${completedSaleData.subtotal.toFixed(2)}`, summaryXValue, finalY + 10, { align: 'right' });
 
     doc.text('Tax (12.5%):', summaryXLabel, finalY + 16);
-    doc.text(`GH₵ ${completedSaleData.tax.toFixed(2)}`, summaryXValue, finalY + 16, { align: 'right' });
+    doc.text(`GHS ${completedSaleData.tax.toFixed(2)}`, summaryXValue, finalY + 16, { align: 'right' });
 
     doc.setDrawColor(200, 200, 200);
     doc.line(summaryXLabel, finalY + 20, summaryXValue, finalY + 20);
 
-    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('Total:', summaryXLabel, finalY + 27);
-    doc.text(`GH₵ ${completedSaleData.total.toFixed(2)}`, summaryXValue, finalY + 27, { align: 'right' });
+    doc.text(`GHS ${completedSaleData.total.toFixed(2)}`, summaryXValue, finalY + 27, { align: 'right' });
 
     // QR Code for non-cash payments
     if (!isCash && completedSaleData.paystackUrl) {
@@ -83,13 +82,13 @@ export default function ReceiptDownloader({ completedSaleData, onDone }: Props) 
         });
 
         // Add QR code image centered
-        doc.addImage(qrDataUrl, 'PNG', 37, finalY + 46, 74, 74);
+        doc.addImage(qrDataUrl, 'PNG', 50, finalY + 44, 50, 50);
 
         // Add the link below QR code
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(37, 99, 235);
-        doc.text(completedSaleData.paystackUrl, 74, finalY + 126, {
+        doc.text(completedSaleData.paystackUrl, 74, finalY + 97, {
           align: 'center',
           maxWidth: 120,
         });
@@ -118,7 +117,8 @@ export default function ReceiptDownloader({ completedSaleData, onDone }: Props) 
     <div className="pt-4 flex flex-col gap-3">
       <button
         onClick={generateReceiptPDF}
-        className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-colors font-semibold shadow-sm"
+        className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-primary text-primary-foreground
+         rounded-lg hover:opacity-90 transition-colors font-semibold shadow-sm"
       >
         <Download className="w-5 h-5" />
         <span>Download Receipt (PDF)</span>

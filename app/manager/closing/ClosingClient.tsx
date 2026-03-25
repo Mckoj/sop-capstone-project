@@ -1,6 +1,9 @@
 "use client";
 import React, { useState } from 'react';
 import { TrendingUp, TrendingDown, Printer, Lock, Banknote, CreditCard, Smartphone, AlertCircle } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const PrintReportButton = dynamic(() => import('./PrintReportButton'), { ssr: false });
 
 interface SalesSummary {
   totalTransactions: number;
@@ -62,6 +65,8 @@ export default function ClosingClient({
     }, 2000);
   };
 
+
+
   const getPaymentIcon = (method: string) => {
     switch (method) {
       case 'Cash': return Banknote;
@@ -80,13 +85,15 @@ export default function ClosingClient({
           <p className="text-muted-foreground">End of day reconciliation and reports</p>
         </div>
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => window.print()}
-            className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors border border-border"
-          >
-            <Printer className="w-5 h-5" />
-            <span className="font-semibold">Print Report</span>
-          </button>
+          <PrintReportButton 
+            salesSummary={salesSummary}
+            paymentBreakdown={paymentBreakdown}
+            cashierClosing={cashierClosing}
+            refundsVoids={refundsVoids}
+            expectedCash={expectedCash}
+            actualCash={actualCash}
+            variance={variance}
+          />
           <button
             onClick={handleClosing}
             disabled={!cashDrawerAmount || isClosing}

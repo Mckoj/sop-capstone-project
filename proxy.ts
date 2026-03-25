@@ -1,15 +1,15 @@
-import { getSessionCookie } from "better-auth/cookies"
 import { type NextRequest, NextResponse } from "next/server"
 
 export async function proxy(request: NextRequest) {
-    const sessionCookie = getSessionCookie(request);
+    // Check for either secure or standard better-auth session cookie
+    const hasSessionCookie = request.cookies.getAll().some(c => c.name.includes("better-auth.session_token"));
     const { pathname, search } = request.nextUrl;
     
     // Protect routes
     const isProtected = pathname.startsWith('/cashier') || pathname.startsWith('/manager') || pathname.startsWith('/admin');
 
     if (isProtected) {
-        if (!sessionCookie) {
+        if (!hasSessionCookie) {
             return NextResponse.redirect(new URL(`/`, request.url));
         }
 
