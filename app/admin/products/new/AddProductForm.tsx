@@ -1,8 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { useActionState } from 'react';
 import { createProduct } from '../actions';
 import { Save, Loader2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { useHardwareScanner } from '@/components/hooks/useHardwareScanner';
+
+const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), {
+  ssr: false,
+});
 
 interface Category {
   id: string;
@@ -11,6 +18,10 @@ interface Category {
 
 export default function AddProductForm({ categories }: { categories: Category[] }) {
   const [state, action, isPending] = useActionState(createProduct, null);
+  const [barcode, setBarcode] = useState('');
+
+  // Hardware scanner fills the barcode field automatically
+  useHardwareScanner((code) => setBarcode(code));
 
   return (
     <form action={action} className="space-y-6">
@@ -79,14 +90,27 @@ export default function AddProductForm({ categories }: { categories: Category[] 
 
         <div>
           <label htmlFor="barcode" className="block text-sm font-medium mb-2">Barcode (SKU)</label>
-          <input 
-            type="text" 
-            id="barcode" 
-            name="barcode" 
-            required 
-            placeholder="Scan or type barcode"
-            className="w-full px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono transition-shadow"
-          />
+          {/* Camera button + text input share the same controlled value; name attr preserved for server action */}
+          <div className="flex gap-2 items-stretch">
+            <input 
+              type="text" 
+              id="barcode" 
+              name="barcode" 
+              required 
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              placeholder="Scan or type barcode"
+              className="flex-1 px-4 py-3 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono transition-shadow"
+            />
+            <BarcodeScanner
+              onScan={(code) => setBarcode(code)}
+              buttonVariant="icon"
+              buttonClassName="px-4 border border-border rounded-lg bg-background hover:bg-secondary"
+            />
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Use a hardware scanner, click the camera icon, or type manually.
+          </p>
         </div>
       </div>
 

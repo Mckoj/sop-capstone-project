@@ -36,3 +36,34 @@ export async function createProduct(prevState: any, formData: FormData) {
   revalidatePath('/admin/products');
   redirect('/admin/products');
 }
+
+export async function deleteProduct(productId: string) {
+  if (!productId) {
+    return { error: 'Product ID is required.' };
+  }
+
+  try {
+    // Guard: block deletion if the product has been sold — it's part of sales history
+    const salesCount = await prisma.saleItem.count({
+      where: { productId },
+    });
+
+    if (salesCount > 0) {
+      return {
+        error: `Cannot delete — this product appears in ${salesCount} sale record(s). Set its quantity to 0 to hide it from the POS instead.`,
+      };
+    }
+
+    await prisma.product.delete({ where: { id: productId } });
+
+    revalidatePath('/admin/products');
+    revalidatePath('/admin/inventory');
+    revalidatePath('/cashier');
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to delete product:', error);
+    return { error: 'Failed to delete the product. Please try again.' };
+  }
+}
+

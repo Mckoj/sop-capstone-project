@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession, signOut } from '@/lib/auth-client';
 import { Search, Scan, ShoppingCart, CreditCard, Trash2, Plus, Minus, LogOut, User, CheckCircle, Clock, XCircle } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { useHardwareScanner } from '@/components/hooks/useHardwareScanner';
 
 const ReceiptDownloader = dynamic(() => import("./ReceiptDownloader"), {
+  ssr: false,
+});
+
+const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), {
   ssr: false,
 });
 
@@ -53,6 +59,7 @@ export default function CashierPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [pendingReference, setPendingReference] = useState<string | null>(null);
   const previousSalesRef = useRef<Sale[]>([]);
   const { data: session, isPending } = useSession();
 
@@ -123,6 +130,35 @@ export default function CashierPage() {
     return () => clearInterval(interval);
   }, [session]);
 
+  // Poll to verify pending digital payment
+  useEffect(() => {
+    if (!pendingReference) return;
+
+    const pollVerify = async () => {
+      try {
+        const res = await fetch(`/api/paystack/verify/${pendingReference}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.verified && data.status === 'paid') {
+            setPendingReference(null);
+            showToast(`\u{1f4b3} Payment confirmed! Sale recorded successfully.`, 'success');
+            setCompletedSaleData((prev: any) => prev ? { ...prev, paymentVerified: true } : prev);
+            // Refresh products since stock was just decremented
+            const productsRes = await fetch('/api/products');
+            if (productsRes.ok) {
+              setProducts(await productsRes.json());
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error verifying payment:', error);
+      }
+    };
+
+    const interval = setInterval(pollVerify, 5000);
+    return () => clearInterval(interval);
+  }, [pendingReference]);
+
   // Filter products based on search
   const filteredProducts = products.filter(
     (p) =>
@@ -154,32 +190,45 @@ export default function CashierPage() {
     }
   };
 
-  // Search by barcode
-  const handleBarcodeSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const product = products.find((p) => p.barcode === barcode);
+  // Lookup by barcode string (used by both hardware scanner and camera)
+  const handleBarcodeValue = useCallback((code: string) => {
+    const product = products.find((p) => p.barcode === code);
     if (product) {
       addToCart(product);
-      setBarcode("");
+      showToast(`✅ ${product.name} added to cart`, 'success');
     } else {
-      alert("Product not found");
+      showToast(`❌ Product not found: ${code}`, 'info');
     }
+  }, [products]);
+
+  // Hardware scanner: auto-fires when USB/Bluetooth scanner sends barcode
+  useHardwareScanner(handleBarcodeValue);
+
+  // Search by barcode (manual form submit)
+  const handleBarcodeSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!barcode.trim()) return;
+    handleBarcodeValue(barcode.trim());
+    setBarcode("");
   };
 
-  // Update quantity
+  // Update quantity — removing item if it drops to 0
   const updateQuantity = (productId: string, delta: number) => {
     setCart(
-      cart.map((item) => {
-        if (item.product.id === productId) {
-          const newQuantity = Math.max(1, item.quantity + delta);
-          if (newQuantity > item.product.quantity) {
-            alert("Not enough stock available");
-            return item;
+      cart
+        .map((item) => {
+          if (item.product.id === productId) {
+            const newQuantity = item.quantity + delta;
+            if (newQuantity <= 0) return null; // signal removal
+            if (newQuantity > item.product.quantity) {
+              alert("Not enough stock available");
+              return item;
+            }
+            return { ...item, quantity: newQuantity };
           }
-          return { ...item, quantity: newQuantity };
-        }
-        return item;
-      }),
+          return item;
+        })
+        .filter(Boolean) as CartItem[],
     );
   };
 
@@ -204,10 +253,49 @@ export default function CashierPage() {
     if (isProcessing) return;
     setIsProcessing(true);
     try {
-      let paystackUrl = null;
-      let paystackRef = null;
+      const isCash = paymentMethod === 'cash';
 
-      if (paymentMethod !== 'cash') {
+      if (isCash) {
+        // CASH FLOW: Save sale + decrement stock immediately
+        const res = await fetch('/api/sales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: cart.map((item) => ({
+              productId: item.product.id,
+              quantity: item.quantity,
+              price: item.product.price,
+            })),
+            subtotal,
+            tax,
+            total,
+            paymentMethod: 'cash',
+            paymentStatus: 'paid',
+          }),
+        });
+
+        if (!res.ok) {
+          alert('Failed to record sale. Please try again.');
+          return;
+        }
+
+        setCompletedSaleData({
+          items: [...cart],
+          subtotal,
+          tax,
+          total,
+          paymentMethod: 'cash',
+          paystackUrl: null,
+          date: new Date().toLocaleString(),
+        });
+
+        setCart([]);
+        const productsRes = await fetch('/api/products');
+        if (productsRes.ok) {
+          setProducts(await productsRes.json());
+        }
+      } else {
+        // DIGITAL FLOW: Only generate Paystack link — webhook creates the sale on payment
         const paystackRes = await fetch('/api/paystack', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -215,6 +303,15 @@ export default function CashierPage() {
             amount: total,
             email: (session?.user as any)?.email || 'customer@yenpoobi.com',
             saleReference: `sale_${Date.now()}`,
+            items: cart.map((item) => ({
+              productId: item.product.id,
+              quantity: item.quantity,
+              price: item.product.price,
+            })),
+            userId: (session?.user as any)?.id,
+            subtotal,
+            tax,
+            paymentMethod,
           }),
         });
 
@@ -224,44 +321,8 @@ export default function CashierPage() {
         }
 
         const paystackData = await paystackRes.json();
-        paystackUrl = paystackData.authorization_url;
-        paystackRef = paystackData.reference;
-      }
 
-      const res = await fetch('/api/sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: cart.map((item) => ({
-            productId: item.product.id,
-            quantity: item.quantity,
-            price: item.product.price,
-          })),
-          subtotal,
-          tax,
-          total,
-          paymentMethod,
-          paymentStatus: paymentMethod === 'cash' ? 'paid' : 'pending',
-          paystackRef,
-        }),
-      });
-
-      if (res.ok) {
-        const saleData = await res.json();
-
-        // Immediately register as pending in ref so polling can detect paid transition
-        if (paymentMethod !== 'cash') {
-          previousSalesRef.current = [
-            { 
-              id: saleData.id, 
-              totalAmount: total, 
-              paymentMethod, 
-              paymentStatus: 'pending', 
-              createdAt: new Date().toISOString() 
-            },
-            ...previousSalesRef.current
-          ];
-        }
+        setPendingReference(paystackData.reference);
 
         setCompletedSaleData({
           items: [...cart],
@@ -269,15 +330,13 @@ export default function CashierPage() {
           tax,
           total,
           paymentMethod,
-          paystackUrl,
-          date: new Date().toLocaleString()
+          paystackUrl: paystackData.authorization_url,
+          paymentVerified: false,
+          date: new Date().toLocaleString(),
         });
 
         setCart([]);
-        const productsRes = await fetch('/api/products');
-        if (productsRes.ok) {
-          setProducts(await productsRes.json());
-        }
+        // Do NOT refresh products here — stock is not decremented until verified
       }
     } catch (error) {
       console.error('Error processing payment:', error);
@@ -332,6 +391,7 @@ export default function CashierPage() {
             <User className="w-4 h-4" />
             <span>Cashier Mode</span>
           </div>
+          <ThemeToggle />
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors text-white"
@@ -374,6 +434,11 @@ export default function CashierPage() {
               >
                 Add
               </button>
+              <BarcodeScanner
+                onScan={(code) => { handleBarcodeValue(code); }}
+                buttonVariant="icon"
+                buttonClassName="px-3 py-3 bg-secondary hover:bg-secondary/80 rounded-lg"
+              />
             </form>
           </div>
 
@@ -420,34 +485,27 @@ export default function CashierPage() {
             )}
           </div>
 
-          {/* Recent Transactions Panel */}
-          {recentSales.length > 0 && (
-            <div className="mt-4 border-t border-border pt-4">
-              <h3 className="text-sm font-bold text-muted-foreground mb-3">TODAY'S TRANSACTIONS</h3>
-              <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
-                {recentSales.slice(0, 8).map(sale => (
-                  <div key={sale.id} className="flex items-center justify-between bg-card border border-border rounded-lg px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      {sale.paymentStatus === 'paid' ? (
-                        <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                      ) : (
-                        <Clock className="w-4 h-4 text-yellow-500 shrink-0" />
-                      )}
-                      <span className="text-sm font-medium">GH₵ {sale.totalAmount.toFixed(2)}</span>
-                      <span className="text-xs text-muted-foreground">{sale.paymentMethod.toUpperCase()}</span>
-                    </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      sale.paymentStatus === 'paid'
-                        ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-                        : 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20'
-                    }`}>
-                      {sale.paymentStatus.toUpperCase()}
-                    </span>
-                  </div>
-                ))}
+          {/* Recent Transactions Nav Button */}
+          <div className="mt-4 pt-4 border-t border-border">
+            <button
+              onClick={() => router.push('/cashier/transactions')}
+              className="w-full flex items-center justify-between px-4 py-3 bg-card border border-border hover:border-primary hover:shadow-sm rounded-xl transition-all group"
+              //style={{ backgroundColor: '#D0D6B5' }}
+            >
+              <div className="flex items-center gap-3 ">
+                <div className="p-2 bg-/10 rounded-lg text-primary group-hover:scale-105 transition-transform">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-bold text-sm">Transaction History</h3>
+                  <p className="text-xs text-muted-foreground font-medium">View today's sales & status</p>
+                </div>
               </div>
-            </div>
-          )}
+              <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
+                <span className="text-lg font-bold leading-none mb-1">→</span>
+              </div>
+            </button>
+          </div>
         </div>
 
         {/* Right Panel - Cart */}
@@ -623,18 +681,53 @@ export default function CashierPage() {
               </>
             ) : (
               <div className="p-8 text-center space-y-6">
-                <div className="w-16 h-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-500/20">
-                  <CheckCircle className="w-8 h-8" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold mb-2">
-                    Payment Successful!
-                  </h3>
-                  <p className="text-muted-foreground font-medium">
-                    The transaction has been safely recorded in the live
-                    database.
-                  </p>
-                </div>
+                {completedSaleData.paymentMethod === 'cash' ? (
+                  <>
+                    <div className="w-16 h-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-500/20">
+                      <CheckCircle className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold mb-2">
+                        Payment Successful!
+                      </h3>
+                      <p className="text-muted-foreground font-medium">
+                        The transaction has been safely recorded in the database.
+                      </p>
+                    </div>
+                  </>
+                ) : completedSaleData.paymentVerified ? (
+                  <>
+                    <div className="w-16 h-16 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-500/20">
+                      <CheckCircle className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold mb-2">
+                        Payment Confirmed!
+                      </h3>
+                      <p className="text-muted-foreground font-medium">
+                        The payment has been verified and the sale is recorded.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 bg-blue-500/10 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/20 relative">
+                      <Clock className="w-8 h-8" />
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></span>
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-bold mb-2">
+                        Awaiting Payment
+                      </h3>
+                      <p className="text-muted-foreground font-medium">
+                        Download the receipt with the payment QR. This screen will update automatically once the customer pays.
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2 animate-pulse">
+                        Checking payment status...
+                      </p>
+                    </div>
+                  </>
+                )}
                 <ReceiptDownloader
                   completedSaleData={completedSaleData}
                   onDone={() => setShowPaymentModal(false)}

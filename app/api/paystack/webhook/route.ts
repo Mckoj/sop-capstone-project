@@ -23,12 +23,59 @@ export async function POST(req: Request) {
     // Only handle successful charges
     if (event.event === 'charge.success') {
       const reference = event.data.reference;
+      const metadata = event.data.metadata;
 
-      // Find sale by paystackRef and update status
-      await prisma.sale.updateMany({
+      // Guard: check if a sale with this reference already exists (prevent duplicates)
+      const existingSale = await prisma.sale.findFirst({
         where: { paystackRef: reference },
-        data: { paymentStatus: 'paid' },
       });
+
+      if (existingSale) {
+        // Already processed — just ensure status is 'paid'
+        if (existingSale.paymentStatus !== 'paid') {
+          await prisma.sale.update({
+            where: { id: existingSale.id },
+            data: { paymentStatus: 'paid' },
+          });
+        }
+        return new Response(JSON.stringify({ received: true }), { status: 200 });
+      }
+
+      // Create the sale record from metadata
+      if (metadata?.items && metadata?.userId) {
+        const items = JSON.parse(metadata.items);
+
+        const sale = await prisma.sale.create({
+          data: {
+            totalAmount: parseFloat(metadata.total),
+            paymentMethod: metadata.paymentMethod || 'card',
+            paymentStatus: 'paid',
+            paystackRef: reference,
+            userId: metadata.userId,
+            items: {
+              create: items.map((item: any) => ({
+                productId: item.productId,
+                quantity: typeof item.quantity === 'string' ? parseInt(item.quantity) : item.quantity,
+                price: typeof item.price === 'string' ? parseFloat(item.price) : item.price,
+              })),
+            },
+          },
+        });
+
+        // Decrement stock for each item
+        for (const item of items) {
+          await prisma.product.update({
+            where: { id: item.productId },
+            data: {
+              quantity: {
+                decrement: item.quantity,
+              },
+            },
+          });
+        }
+
+        console.log(`[Webhook] Sale ${sale.id} created from Paystack ref ${reference}`);
+      }
     }
 
     return new Response(JSON.stringify({ received: true }), { status: 200 });

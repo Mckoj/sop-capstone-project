@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Box, AlertTriangle } from "lucide-react";
 import RestockAction from "./RestockAction";
+import DeleteProductButton from "@/app/admin/products/DeleteProductButton";
 
 export const revalidate = 30;
 
@@ -71,8 +72,9 @@ export default async function InventoryTab() {
                         </span>
                       )}
                     </td>
-                    <td className="p-4 flex items-center justify-end">
+                    <td className="p-4 flex items-center justify-end gap-2">
                       <RestockAction productId={product.id} />
+                      <DeleteProductButton productId={product.id} productName={product.name} />
                     </td>
                   </tr>
                 );

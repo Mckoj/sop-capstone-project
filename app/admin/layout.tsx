@@ -1,16 +1,17 @@
 "use client";
-import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSession, signOut } from '@/lib/auth-client';
 import { LayoutDashboard, Package, Users, BarChart3, LogOut, ShoppingCart, Box, List } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { data: session, isPending } = useSession();
+  const { data: session } = useSession();
 
-  // Note: Route protection is now strictly enforced at the edge by middleware.ts
+  // Route protection is strictly enforced at the edge by middleware.ts
+  // No need to block rendering here — that delays the entire layout mount.
 
   const handleLogout = async () => {
     await signOut({
@@ -38,14 +39,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return pathname.startsWith(path);
   };
 
-  if (isPending || !session) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Header */}
@@ -57,7 +50,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-primary-foreground/10 rounded-lg text-sm">
             <Users className="w-4 h-4" />
-            <span>Admin: {session.user?.name || 'User'}</span>
+            <span>Admin: {session?.user?.name || 'User'}</span>
           </div>
           <Link
             href="/cashier"
@@ -65,6 +58,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           >
             Switch to Cashier
           </Link>
+          <ThemeToggle />
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors text-sm text-white"
@@ -82,7 +76,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             {navItems.map(item => {
               const Icon = item.icon;
               const active = isActive(item.path);
-              
+
               return (
                 <Link
                   key={item.path}

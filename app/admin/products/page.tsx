@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Package, Plus } from "lucide-react";
 import Link from "next/link";
+import DeleteProductButton from "./DeleteProductButton";
 
 export const revalidate = 30;
 
@@ -40,6 +41,7 @@ export default async function ProductsPage() {
                 <th className="p-4 font-semibold text-sm text-right">
                   Barcode
                 </th>
+                <th className="p-4 font-semibold text-sm text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -74,12 +76,15 @@ export default async function ProductsPage() {
                   <td className="p-4 text-sm text-muted-foreground font-mono text-right">
                     {product.barcode}
                   </td>
+                  <td className="p-4 text-right">
+                    <DeleteProductButton productId={product.id} productName={product.name} />
+                  </td>
                 </tr>
               ))}
               {products.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="p-12 text-center text-muted-foreground"
                   >
                     <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />

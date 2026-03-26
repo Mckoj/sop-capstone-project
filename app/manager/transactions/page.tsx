@@ -29,8 +29,8 @@ export default async function TransactionsPage() {
       tax: 0,
       discount: 0,
       total: sale.totalAmount,
-      paymentMethod: 'cash', // Defaulted to cash since no payment column exists
-      status: 'completed'    // Defaulted completed since no status column exists
+      paymentMethod: sale.paymentMethod,
+      status: sale.paymentStatus === 'paid' ? 'completed' : sale.paymentStatus,
     };
   });
 

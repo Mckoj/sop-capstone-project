@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSession, signOut } from '@/lib/auth-client';
 import { LayoutDashboard, Users, Receipt, DollarSign, LogOut, ShoppingCart, BarChart3 } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function ManagerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -38,14 +39,11 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
   };
 
   if (isPending || !session) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
+    return null; // Middleware blocks unauthenticated users — this is just a flash guard
   }
 
   return (
+
     <div className="h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
       <div className="bg-primary text-primary-foreground px-6 py-4 flex items-center justify-between shadow-md">
@@ -64,6 +62,7 @@ export default function ManagerLayout({ children }: { children: React.ReactNode 
           >
             Switch to Cashier
           </Link>
+          <ThemeToggle />
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm"

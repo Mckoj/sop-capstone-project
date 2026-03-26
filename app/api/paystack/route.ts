@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
     }
 
-    const { amount, email, saleReference } = await req.json();
+    const { amount, email, saleReference, items, userId, subtotal, tax, paymentMethod } = await req.json();
 
     const response = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
@@ -24,6 +24,14 @@ export async function POST(req: NextRequest) {
         amount: Math.round(amount * 100), // Paystack uses pesewas
         reference: saleReference,
         currency: 'GHS',
+        metadata: {
+          items: JSON.stringify(items),
+          userId,
+          subtotal,
+          tax,
+          total: amount,
+          paymentMethod: paymentMethod || 'card',
+        },
       }),
     });
 
